@@ -93,6 +93,94 @@ jobs:
           name: dist
           path: dist/
           if-no-files-found: error
+  zipapp:
+    name: Build pipx zipapp
+    needs: build-package
+    runs-on: ubuntu-26.04
+    permissions:
+      contents: read
+    outputs:
+      artifact-id: ${{ steps.upload.outputs.artifact-id }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set source timestamp
+        run: echo "SOURCE_DATE_EPOCH=$(git log -1 --format=%ct)" >>"$GITHUB_ENV"
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          artifact-ids: ${{ needs.build-package.outputs.artifact-id }}
+          path: ${{ runner.temp }}/dist
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          version: latest-known
+          python-version: "3.15"
+          enable-cache: false
+      - name: Install locked zipapp tools
+        uses: tox-dev/github-workflows/install-locked-tools@076d3877b49d06f19fe2588eeacf76d37b21ebd7 # v4.0.1
+        with:
+          groups: zipapp
+          venv: ${{ runner.temp }}/tools
+          verify-lock: pylock.toml
+          verify-groups: project-runtime
+      # shiv's pip would resolve the runtime dependencies fresh and drop colorama on Linux; install the locked, hashed
+      # runtime selection for each platform marker set and the built wheel instead
+      - name: Install locked runtime packages
+        env:
+          SITE: ${{ runner.temp }}/zipapp-site
+          TAG: ${{ github.ref_name }}
+          DIST: ${{ runner.temp }}/dist
+        run: |
+          set -euo pipefail
+          unset UV_EXCLUDE_NEWER UV_EXCLUDE_NEWER_PACKAGE
+          for platform in x86_64-unknown-linux-gnu x86_64-pc-windows-msvc aarch64-apple-darwin; do
+            uv pip install --no-config --preview-features pylock --target "$SITE" --python 3.15 --python-version 3.11 \
+              --python-platform "$platform" --group project-runtime --only-binary :all: --require-hashes -r pylock.toml
+          done
+          uv pip install --no-config --target "$SITE" --python 3.15 --no-deps --no-index "$DIST/pipx-$TAG-py3-none-any.whl"
+      - name: Build zipapp
+        env:
+          SITE: ${{ runner.temp }}/zipapp-site
+        run: |
+          mkdir "$RUNNER_TEMP/zipapp"
+          shiv --site-packages "$SITE" -c pipx -o "$RUNNER_TEMP/zipapp/pipx.pyz" --reproducible
+      - id: upload
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: pipx.pyz
+          path: ${{ runner.temp }}/zipapp/pipx.pyz
+          if-no-files-found: error
+  zipapp-test:
+    name: Test pipx zipapp on ${{ matrix.os }}
+    needs: zipapp
+    runs-on: ${{ matrix.os }}
+    permissions: {}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-26.04, windows-2025]
+    steps:
+      - name: Setup Python 3.11
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        env:
+          UV_VENV_SEED: "true"
+        with:
+          version: latest-known
+          enable-cache: false
+          activate-environment: true
+          python-version: "3.11"
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          artifact-ids: ${{ needs.zipapp.outputs.artifact-id }}
+          path: ${{ runner.temp }}/zipapp
+      - name: Test zipapp by installing black
+        shell: bash
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          test "$(python "$RUNNER_TEMP/zipapp/pipx.pyz" --version)" = "$TAG"
+          python "$RUNNER_TEMP/zipapp/pipx.pyz" install black
   previous:
     needs: source-check
     runs-on: ubuntu-26.04
@@ -248,7 +336,7 @@ jobs:
           dist: dist
   stage-release:
     name: Stage GitHub Release
-    needs: [build-package, notes, previous]
+    needs: [notes, previous, zipapp, zipapp-test]
     runs-on: ubuntu-26.04
     permissions:
       contents: write
@@ -259,7 +347,7 @@ jobs:
           path: ${{ runner.temp }}/release-notes
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          name: pipx.pyz
+          artifact-ids: ${{ needs.zipapp.outputs.artifact-id }}
           path: ${{ runner.temp }}/zipapp
       - uses: tox-dev/github-workflows/publish-github-release@076d3877b49d06f19fe2588eeacf76d37b21ebd7 # v4.0.1
         env:
@@ -273,7 +361,7 @@ jobs:
           mode: stage
   publish-release:
     name: Publish GitHub Release
-    needs: [notes, previous, stage-release, verify-pypi]
+    needs: [notes, previous, stage-release, verify-pypi, zipapp]
     runs-on: ubuntu-26.04
     permissions:
       contents: write
@@ -284,7 +372,7 @@ jobs:
           path: ${{ runner.temp }}/release-notes
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          name: pipx.pyz
+          artifact-ids: ${{ needs.zipapp.outputs.artifact-id }}
           path: ${{ runner.temp }}/zipapp
       - uses: tox-dev/github-workflows/publish-github-release@076d3877b49d06f19fe2588eeacf76d37b21ebd7 # v4.0.1
         env:
