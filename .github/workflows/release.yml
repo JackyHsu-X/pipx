@@ -12,9 +12,27 @@ jobs:
     permissions:
       contents: read
     uses: ./.github/workflows/tests.yml
+  source-check:
+    name: Check tagged source
+    runs-on: ubuntu-26.04
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          version: latest-known
+          python-version: "3.15"
+          enable-cache: false
+      - uses: tox-dev/github-workflows/check-tagged-source@076d3877b49d06f19fe2588eeacf76d37b21ebd7 # v4.0.1
   build-package:
     name: Build pipx package
-    needs: test
+    needs: [test, source-check]
     runs-on: ubuntu-26.04
     permissions:
       contents: read
@@ -76,6 +94,7 @@ jobs:
           path: dist/
           if-no-files-found: error
   previous:
+    needs: source-check
     runs-on: ubuntu-26.04
     permissions:
       contents: read
