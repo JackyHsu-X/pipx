@@ -12,7 +12,7 @@ jobs:
       contents: read
       pull-requests: read
     steps:
-      - uses: tox-dev/github-workflows/recheck-hook-update-cooldown@e2d5e308194a31710039f3237b7157431c0e38b5 # v2.0.0
+      - uses: tox-dev/github-workflows/recheck-hook-update-cooldown@076d3877b49d06f19fe2588eeacf76d37b21ebd7 # v4.0.1
         with:
           workflow: tests.yml
           job-name: hook-cooldown

@@ -9,11 +9,8 @@ concurrency:
   cancel-in-progress: false
 jobs:
   upgrade:
-    uses: tox-dev/github-workflows/.github/workflows/upgrade-release-tools.yaml@e2d5e308194a31710039f3237b7157431c0e38b5 # v2.0.0
+    uses: tox-dev/github-workflows/.github/workflows/upgrade-release-tools.yaml@076d3877b49d06f19fe2588eeacf76d37b21ebd7 # v4.0.1
     permissions:
       contents: read
     secrets:
       RELEASE_APP_PRIVATE_KEY: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
-    with:
-      lock-groups: >-
-        release-build release-check release-news release-notes release-prepare release-validate

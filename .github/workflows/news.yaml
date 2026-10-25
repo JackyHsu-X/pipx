@@ -19,14 +19,14 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
         with:
           version: latest-known
           python-version: "3.15"
           enable-cache: false
       - name: Install locked release tools
-        uses: tox-dev/github-workflows/install-locked-tools@e2d5e308194a31710039f3237b7157431c0e38b5 # v2.0.0
+        uses: tox-dev/github-workflows/install-locked-tools@076d3877b49d06f19fe2588eeacf76d37b21ebd7 # v4.0.1
         with:
           groups: release-news
           venv: ${{ runner.temp }}/tools
-      - uses: tox-dev/github-workflows/validate-news@e2d5e308194a31710039f3237b7157431c0e38b5 # v2.0.0
+      - uses: tox-dev/github-workflows/validate-news@076d3877b49d06f19fe2588eeacf76d37b21ebd7 # v4.0.1
